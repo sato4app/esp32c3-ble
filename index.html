@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 BLE Chat</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { padding: 10px 15px; margin: 5px; font-size: 16px; }
+    input { padding: 10px; font-size: 16px; width: 60%; }
+    #log { width: 100%; height: 200px; margin-top: 10px; padding: 5px; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <h2>ESP32 BLE Chat</h2>
+  <button id="connectBtn">ESP32に接続</button>
+  <button id="disconnectBtn" disabled>切断</button>
+  <br><br>
+  
+  <input type="text" id="sendText" placeholder="送信する文字を入力" disabled>
+  <button id="sendBtn" disabled>送信</button>
+  <br>
+  <textarea id="log" readonly></textarea>
+
+  <script>
+    // ESP32側のコードと合わせたUUID
+    const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    const RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Webからの書込先
+    const TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Webでの受取先
+
+    let bluetoothDevice;
+    let rxCharacteristic; // 送信用
+
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const sendText = document.getElementById('sendText');
+    const logArea = document.getElementById('log');
+
+    function log(message) {
+      logArea.value += message + '\n';
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    connectBtn.addEventListener('click', async () => {
+      try {
+        log('デバイスを検索中...');
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'ESP32-C3-BLE' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        log('接続しています...');
+        const server = await bluetoothDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        // 受信用（TX）のセットアップ
+        const txCharacteristic = await service.getCharacteristic(TX_UUID);
+        await txCharacteristic.startNotifications();
+        txCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+          const value = new TextDecoder().decode(event.target.value);
+          log('ESP32から受信: ' + value);
+        });
+
+        // 送信用（RX）のセットアップ
+        rxCharacteristic = await service.getCharacteristic(RX_UUID);
+
+        log('✅ 接続完了！');
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        sendBtn.disabled = false;
+        sendText.disabled = false;
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+          log('❌ 切断されました');
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          sendBtn.disabled = true;
+          sendText.disabled = true;
+        });
+
+      } catch (error) {
+        log('エラー: ' + error);
+      }
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
+    });
+
+    sendBtn.addEventListener('click', async () => {
+      const text = sendText.value;
+      if (!text || !rxCharacteristic) return;
+      try {
+        const encoder = new TextEncoder();
+        await rxCharacteristic.writeValue(encoder.encode(text));
+        log('Webから送信: ' + text);
+        sendText.value = '';
+      } catch (error) {
+        log('送信エラー: ' + error);
+      }
+    });
+  </script>
+</body>
+</html>
