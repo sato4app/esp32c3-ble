@@ -1,4 +1,4 @@
-## ESP32C3-BLE - ESP32-C3からAndroidにBluetooth接続
+## esp32-1st-check - ESP32-C3からAndroidにBluetooth接続
 
 ESP32-C3からAndroidにBluetooth接続するWebアプリ
 テキストを双方向でやり取りする
@@ -10,7 +10,7 @@ Web側（ブラウザ）とファーム側（ESP32-C3）を1つのリポジト�
 
 ```
 index.html                      Web Bluetooth 側（接続・送受信・ログ表示）
-esp32c3-ble.code-workspace      VS Code 用（リポジトリと firmware を同時に開く）
+esp32-1st-check.code-workspace  VS Code 用（リポジトリと firmware を同時に開く）
 firmware/                       ESP32ファーム（PlatformIOプロジェクト）
   platformio.ini                ボード・ビルド設定（プログラムごとに [env:] を追加）
   src/main.cpp                  BLEサーバ（Nordic UART Service 準拠）
@@ -30,7 +30,7 @@ Web側とファーム側でUUIDを一致させている（Nordic UART Service）
 
 ### ファーム側（ESP32-C3）
 
-VS Codeで `esp32c3-ble.code-workspace` を開き、PlatformIOでビルド・書き込みする。
+VS Codeで `esp32-1st-check.code-workspace` を開き、PlatformIOでビルド・書き込みする。
 CLIの場合:
 
 ```bash
