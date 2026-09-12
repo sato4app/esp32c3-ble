@@ -2,25 +2,121 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <meta name="description" content="ESP32-C3とWeb Bluetoothでテキストを双方向に送受信する">
   <title>ESP32 BLE Chat</title>
+
+  <!-- PWA（GitHub Pagesのプロジェクトページでも動くよう相対パス） -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    button { padding: 10px 15px; margin: 5px; font-size: 16px; }
-    input { padding: 10px; font-size: 16px; width: 60%; }
-    #log { width: 100%; height: 200px; margin-top: 10px; padding: 5px; box-sizing: border-box; }
+    :root {
+      --theme: #0b3d91;
+      --bg: #f4f6fa;
+      --fg: #1b1f24;
+      --border: #c9d2e3;
+      --ok: #1a7f37;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    header {
+      background: var(--theme);
+      color: #fff;
+      padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    #status {
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      white-space: nowrap;
+    }
+    #status.connected { background: var(--ok); }
+    main { padding: 16px; max-width: 720px; margin: 0 auto; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    button {
+      flex: 1 1 auto;
+      min-height: 48px;
+      min-width: 120px;
+      padding: 12px 16px;
+      font-size: 16px;
+      border: 1px solid var(--theme);
+      border-radius: 8px;
+      background: var(--theme);
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary { background: #fff; color: var(--theme); }
+    button:disabled { background: #dfe3ea; border-color: var(--border); color: #8a8f98; cursor: default; }
+    input[type="text"] {
+      flex: 1 1 180px;
+      min-height: 48px;
+      padding: 12px;
+      font-size: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    #log {
+      width: 100%;
+      height: 45vh;
+      min-height: 180px;
+      padding: 8px;
+      font-size: 14px;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      resize: vertical;
+    }
+    #notice {
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      background: #fff4e5;
+      border: 1px solid #f0b429;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <h2>ESP32 BLE Chat</h2>
-  <button id="connectBtn">ESP32に接続</button>
-  <button id="disconnectBtn" disabled>切断</button>
-  <br><br>
-  
-  <input type="text" id="sendText" placeholder="送信する文字を入力" disabled>
-  <button id="sendBtn" disabled>送信</button>
-  <br>
-  <textarea id="log" readonly></textarea>
+  <header>
+    <h1>ESP32 BLE Chat</h1>
+    <span id="status">未接続</span>
+  </header>
+
+  <main>
+    <p id="notice" hidden></p>
+
+    <div class="row">
+      <button id="connectBtn">ESP32に接続</button>
+      <button id="disconnectBtn" class="secondary" disabled>切断</button>
+      <button id="installBtn" class="secondary" hidden>ホーム画面に追加</button>
+    </div>
+
+    <div class="row">
+      <input type="text" id="sendText" placeholder="送信する文字を入力" enterkeyhint="send" autocomplete="off" disabled>
+      <button id="sendBtn" disabled>送信</button>
+    </div>
+
+    <textarea id="log" readonly></textarea>
+  </main>
 
   <script>
     // ESP32側のコードと合わせたUUID
@@ -33,13 +129,48 @@
 
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
+    const installBtn = document.getElementById('installBtn');
     const sendBtn = document.getElementById('sendBtn');
     const sendText = document.getElementById('sendText');
     const logArea = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const notice = document.getElementById('notice');
 
     function log(message) {
-      logArea.value += message + '\n';
+      const time = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+      logArea.value += '[' + time + '] ' + message + '\n';
       logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // 接続状態に応じてUIをまとめて切り替える
+    function setConnected(connected) {
+      statusEl.textContent = connected ? '接続中' : '未接続';
+      statusEl.classList.toggle('connected', connected);
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+      sendBtn.disabled = !connected;
+      sendText.disabled = !connected;
+    }
+
+    function showNotice(html) {
+      notice.innerHTML = html;
+      notice.hidden = false;
+    }
+
+    // Web Bluetoothが使える環境かを起動時に判定する
+    function checkEnvironment() {
+      if (!window.isSecureContext) {
+        showNotice('このページは <b>HTTPS または localhost</b> で開く必要があります。'
+          + 'Web Bluetooth APIは安全なコンテキストでのみ動作します。');
+        connectBtn.disabled = true;
+        return;
+      }
+      if (!navigator.bluetooth) {
+        showNotice('このブラウザは <b>Web Bluetooth API</b> に対応していません。'
+          + 'Android版Chrome、またはデスクトップ版のChrome/Edgeで開いてください'
+          + '（iOSのSafari・Firefoxは非対応）。');
+        connectBtn.disabled = true;
+      }
     }
 
     connectBtn.addEventListener('click', async () => {
@@ -48,6 +179,13 @@
         bluetoothDevice = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'ESP32-C3-BLE' }],
           optionalServices: [SERVICE_UUID]
+        });
+
+        // 切断検知はデバイスごとに一度だけ登録する（再接続時の二重登録を避ける）
+        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+          log('❌ 切断されました');
+          rxCharacteristic = null;
+          setConnected(false);
         });
 
         log('接続しています...');
@@ -66,18 +204,7 @@
         rxCharacteristic = await service.getCharacteristic(RX_UUID);
 
         log('✅ 接続完了！');
-        connectBtn.disabled = true;
-        disconnectBtn.disabled = false;
-        sendBtn.disabled = false;
-        sendText.disabled = false;
-
-        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
-          log('❌ 切断されました');
-          connectBtn.disabled = false;
-          disconnectBtn.disabled = true;
-          sendBtn.disabled = true;
-          sendText.disabled = true;
-        });
+        setConnected(true);
 
       } catch (error) {
         log('エラー: ' + error);
@@ -90,8 +217,8 @@
       }
     });
 
-    sendBtn.addEventListener('click', async () => {
-      const text = sendText.value;
+    async function send() {
+      const text = sendText.value.trim();
       if (!text || !rxCharacteristic) return;
       try {
         const encoder = new TextEncoder();
@@ -101,7 +228,45 @@
       } catch (error) {
         log('送信エラー: ' + error);
       }
+    }
+
+    sendBtn.addEventListener('click', send);
+    // スマホのソフトキーボードの実行キーでも送信できるようにする
+    sendText.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        send();
+      }
     });
+
+    // ホーム画面への追加（Androidのインストールプロンプト）
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+      installBtn.hidden = false;
+    });
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.hidden = true;
+    });
+    window.addEventListener('appinstalled', () => {
+      installBtn.hidden = true;
+      log('ホーム画面に追加しました');
+    });
+
+    // Service Workerの登録（オフライン起動用）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .catch((error) => console.error('Service Workerの登録に失敗:', error));
+      });
+    }
+
+    checkEnvironment();
   </script>
 </body>
 </html>

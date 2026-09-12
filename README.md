@@ -10,6 +10,9 @@ Web側（ブラウザ）とファーム側（ESP32-C3）を1つのリポジト�
 
 ```
 index.html                      Web Bluetooth 側（接続・送受信・ログ表示）
+manifest.json                   PWA設定（アプリ名・アイコン・表示モード）
+service-worker.js               オフライン起動用のキャッシュ制御
+icons/                          PWAアイコン（192x192 / 512x512）
 esp32-1st-check.code-workspace  VS Code 用（リポジトリと firmware を同時に開く）
 firmware/                       ESP32ファーム（PlatformIOプロジェクト）
   platformio.ini                ボード・ビルド設定（プログラムごとに [env:] を追加）
@@ -56,6 +59,19 @@ python -m http.server 8000
 ```
 
 Chrome（Android/デスクトップ）で動作する。SafariとFirefoxはWeb Bluetooth非対応。
+
+### Androidで使う（PWA）
+
+PWA対応済みのため、ホーム画面に追加してアプリとして起動できる。
+
+1. GitHub Pages を有効にする（Settings → Pages → Branch: `main` / `(root)`）
+2. Androidの Chrome で `https://<ユーザー名>.github.io/esp32-1st-check/` を開く
+3. 画面の「ホーム画面に追加」ボタン、またはChromeメニューの「アプリをインストール」を選ぶ
+
+- Web Bluetooth はHTTPS必須のため、AndroidからはGitHub Pages等のHTTPS経由で開く
+- 端末のBluetoothをONにする（Android 11以下は位置情報もONが必要）
+- Service Workerで画面はオフラインでも起動するが、BLE接続自体には通信不要
+- 配信ファイルを変更したら `service-worker.js` の `CACHE_VERSION` を上げる
 
 ## ESP32プログラムを追加する場合
 
