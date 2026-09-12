@@ -2,7 +2,14 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "firmware"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.exclude": {
+			"firmware": true
+		}
+	}
 }
