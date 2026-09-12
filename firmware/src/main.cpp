@@ -9,6 +9,8 @@
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E" // Web → ESP32
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E" // ESP32 → Web
 
+#define LED_PIN 8 // 動作確認用LEDのGPIO番号
+
 BLEServer *pServer = NULL;
 BLECharacteristic * pTxCharacteristic;
 bool deviceConnected = false;
@@ -39,7 +41,14 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  delay(3000); // ESP32-C3のUSBシリアル認識待ち
+  // ESP32-C3のUSBシリアル認識待ちを兼ねて、LEDを0.3秒間隔で10回点滅させる
+  pinMode(LED_PIN, OUTPUT);
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(300);
+    digitalWrite(LED_PIN, LOW);
+    delay(300);
+  }
   Serial.println("BLE起動中...");
 
   BLEDevice::init("ESP32-C3-BLE"); // スマホに表示される名前
